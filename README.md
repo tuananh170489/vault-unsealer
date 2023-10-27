@@ -1,0 +1,1 @@
+Main idea was use Kubernetes secretes as source for auto unseal
