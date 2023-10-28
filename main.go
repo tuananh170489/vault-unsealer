@@ -26,7 +26,7 @@ var (
 func init() {
 	// Get environment variables
 	vaultURL = getEnv("VAULT_URL", "http://localhost:8200")
-	namespace = getEnv("POD_NAMESPACE", "default")
+	namespace = getEnv("NAMESPACE", "default")
 	vaultRootTokenSecret = getEnv("VAULT_ROOT_TOKEN_SECRET", "vault-root-token")
 	vaultKeysSecret = getEnv("VAULT_KEYS_SECRET", "vault-keys")
 }
@@ -75,9 +75,7 @@ func createKubernetesClient() *kubernetes.Clientset {
 func checkSealStatus(vaultClient *api.Client, clientset *kubernetes.Clientset, namespace, secretName string) {
 	for {
 		// Check if Vault is initialized, and if not, initialize it
-		if !checkVaultInitialized(vaultClient) {
-			initializeVault(vaultClient)
-		}
+		initializeVault(vaultClient)
 
 		// Get the current seal status of Vault
 		sealStatusResponse, err := vaultClient.Sys().SealStatus()
@@ -95,29 +93,32 @@ func checkSealStatus(vaultClient *api.Client, clientset *kubernetes.Clientset, n
 	}
 }
 
-func checkVaultInitialized(vaultClient *api.Client) bool {
+func initializeVault(vaultClient *api.Client) {
+	// Check if Vault is initialized, and if not, initialize it
 	initialized, err := vaultClient.Sys().InitStatus()
 	if err != nil {
 		log.Fatal(err)
 	}
-	return initialized
-}
+	if !initialized {
+		log.Println("Vault is not initialized, initializing...")
+		initRequest := &api.InitRequest{
+			SecretShares:    5,
+			SecretThreshold: 3,
+		}
 
-func initializeVault(vaultClient *api.Client) {
-	initRequest := &api.InitRequest{
-		SecretShares:    5,
-		SecretThreshold: 3,
+		initResponse, err := vaultClient.Sys().Init(initRequest)
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Println("Vault has been initialized")
+
+		rootToken := initResponse.RootToken
+		keys := initResponse.Keys
+
+		// Save the root token and keys in Kubernetes
+		log.Println("Saving root token and keys...")
+		saveRootTokenAndKeys(rootToken, keys, vaultRootTokenSecret, vaultKeysSecret, namespace)
 	}
-
-	initResponse, err := vaultClient.Sys().Init(initRequest)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	rootToken := initResponse.RootToken
-	keys := initResponse.Keys
-
-	saveRootTokenAndKeys(rootToken, keys, vaultRootTokenSecret, vaultKeysSecret, namespace)
 }
 
 func unsealVault(vaultClient *api.Client) {
