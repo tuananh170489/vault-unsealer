@@ -59,7 +59,7 @@ affinity: {}
 
 unsealer:
   # url for vault
-  vault_url: "https://vault.vault.cluster.local:8200"
+  vault_url: "https://vault.vault.svc.cluster.local:8200"
   # secret for storing vault root token
   vault_root_token_secret: vault-root-token
   # secret for storing vault unlock keys

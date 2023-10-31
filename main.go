@@ -145,11 +145,19 @@ func getVaultKeys(keysSecret, namespace string) ([]string, error) {
 	clientset := createKubernetesClient()
 
 	// Check if the secret exists
+	existKeysSecret, err := checkSecretExist(clientset, namespace, keysSecret)
+	if err != nil {
+		log.Error(err)
+	}
+
+	if !existKeysSecret {
+		log.Errorf("Secret %s does not exist in namespace %s", keysSecret, namespace)
+	}
+
+	// Get the secret
 	secret, err := clientset.CoreV1().Secrets(namespace).Get(context.Background(), keysSecret, metav1.GetOptions{})
 	if err != nil {
-		if errors.IsNotFound(err) {
-			log.Errorf("Secret %s does not exist in namespace %s.", keysSecret, namespace)
-		}
+		log.Error(err)
 	}
 
 	// Extract the Vault keys from the secret
