@@ -55,7 +55,7 @@ func createVaultClient(vaultURL string) *vault.Client {
 	}
 	vaultClient, err := vault.NewClient(config)
 	if err != nil {
-		log.Errorf("Unable to create Vault client: %v", err)
+		log.Error(err)
 	}
 	return vaultClient
 }
@@ -63,12 +63,12 @@ func createVaultClient(vaultURL string) *vault.Client {
 func createKubernetesClient() *kubernetes.Clientset {
 	config, err := rest.InClusterConfig()
 	if err != nil {
-		log.Errorf("Unable to create Kubernetes client: %v", err)
+		log.Error(err)
 	}
 
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		log.Errorf("Unable to create Kubernetes client: %v", err)
+		log.Error(err)
 	}
 	return clientset
 }
@@ -81,7 +81,7 @@ func checkSealStatus(vaultClient *vault.Client) {
 		log.Info("Checking Vault seal status...")
 		sealStatusResponse, err := vaultClient.Sys().SealStatus()
 		if err != nil {
-			log.Errorf("Unable to get Vault seal status: %v", err)
+			log.Error(err)
 		}
 
 		// If Vault is not initialized, initialize it
@@ -109,7 +109,7 @@ func initializeVault(vaultClient *vault.Client) {
 
 	initResponse, err := vaultClient.Sys().Init(initRequest)
 	if err != nil {
-		log.Errorf("Unable to initialize Vault: %v", err)
+		log.Error(err)
 	}
 
 	rootToken := initResponse.RootToken
@@ -123,14 +123,14 @@ func initializeVault(vaultClient *vault.Client) {
 func unsealVault(vaultClient *vault.Client) {
 	keys, err := getVaultKeys(vaultKeysSecret, namespace)
 	if err != nil {
-		log.Errorf("Unable to get Vault keys: %v", err)
+		log.Error(err)
 	}
 
 	// Unseal the Vault using the keys
 	for _, key := range keys {
 		response, err := vaultClient.Sys().Unseal(key)
 		if err != nil {
-			log.Errorf("Unable to unseal Vault: %v", err)
+			log.Error(err)
 		}
 		if response.Sealed {
 			log.Info("Unsealing Vault...")
@@ -150,7 +150,6 @@ func getVaultKeys(keysSecret, namespace string) ([]string, error) {
 		if errors.IsNotFound(err) {
 			log.Errorf("Secret %s does not exist in namespace %s.", keysSecret, namespace)
 		}
-		log.Errorf("Unable to get secret: %v", err)
 	}
 
 	// Extract the Vault keys from the secret
@@ -178,11 +177,11 @@ func saveRootTokenAndKeys(keys []string, rootToken, rootTokenSecret, keysSecret,
 	// Check if both secrets exist
 	existRootTokenSecret, err := checkSecretExist(clientset, namespace, rootTokenSecret)
 	if err != nil {
-		log.Errorf("Unable to get secret: %v", err)
+		log.Error(err)
 	}
 	existKeysSecret, err := checkSecretExist(clientset, namespace, keysSecret)
 	if err != nil {
-		log.Errorf("Unable to get secret: %v", err)
+		log.Error(err)
 	}
 
 	if existRootTokenSecret && existKeysSecret {
@@ -224,7 +223,7 @@ func createSecret(clientset *kubernetes.Clientset, namespace string, secret *v1.
 	defer wg.Done()
 	_, err := clientset.CoreV1().Secrets(namespace).Create(context.Background(), secret, metav1.CreateOptions{})
 	if err != nil {
-		log.Errorf("Unable to create secret: %v", err)
+		log.Error(err)
 	}
 }
 
