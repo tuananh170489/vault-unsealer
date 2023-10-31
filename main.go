@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"sync"
 	"time"
@@ -22,6 +21,7 @@ var (
 	namespace            string
 	vaultRootTokenSecret string
 	vaultKeysSecret      string
+	log                  = logrus.New()
 )
 
 func init() {
@@ -55,48 +55,42 @@ func createVaultClient(vaultURL string) *vault.Client {
 	}
 	vaultClient, err := vault.NewClient(config)
 	if err != nil {
-		log.Fatalf("[FATAL] Unable to create Vault client: %v", err)
+		log.Errorf("Unable to create Vault client: %v", err)
 	}
 	return vaultClient
 }
 
 func createKubernetesClient() *kubernetes.Clientset {
-	log := logrus.New()
-
 	config, err := rest.InClusterConfig()
 	if err != nil {
-		log.Fatalf("[FATAL] Unable to create in-cluster config: %v", err)
+		log.Errorf("Unable to create Kubernetes client: %v", err)
 	}
 
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		log.Fatalf("[FATAL] Unable to create Kubernetes client: %v", err)
+		log.Errorf("Unable to create Kubernetes client: %v", err)
 	}
 	return clientset
 }
 
 func checkSealStatus(vaultClient *vault.Client) {
-	log := logrus.New()
-
-	log.Info("[INFO] The Vault Unsealer is running...")
+	log.Info("The Vault Unsealer is running...")
 
 	for {
 		// Get the current seal status of Vault
-		log.Info("[INFO] Checking Vault seal status...")
+		log.Info("Checking Vault seal status...")
 		sealStatusResponse, err := vaultClient.Sys().SealStatus()
 		if err != nil {
-			log.Fatalf("[FATAL] Unable to get seal status: %v", err)
+			log.Errorf("Unable to get Vault seal status: %v", err)
 		}
 
 		// If Vault is not initialized, initialize it
 		if !sealStatusResponse.Initialized {
-			log.Info("[INFO] Initializing Vault...")
 			initializeVault(vaultClient)
 		}
 
 		// If Vault is sealed, unseal it
 		if sealStatusResponse.Sealed {
-			log.Info("[INFO] Unsealing Vault...")
 			unsealVault(vaultClient)
 		}
 
@@ -106,8 +100,7 @@ func checkSealStatus(vaultClient *vault.Client) {
 }
 
 func initializeVault(vaultClient *vault.Client) {
-	log := logrus.New()
-	log.SetLevel(logrus.InfoLevel)
+	log.Info("Initializing Vault...")
 
 	initRequest := &vault.InitRequest{
 		SecretShares:    5,
@@ -116,8 +109,7 @@ func initializeVault(vaultClient *vault.Client) {
 
 	initResponse, err := vaultClient.Sys().Init(initRequest)
 	if err != nil {
-		logrus.SetLevel(logrus.FatalLevel)
-		log.Fatalf("Unable to initialize Vault: %v", err)
+		log.Errorf("Unable to initialize Vault: %v", err)
 	}
 
 	rootToken := initResponse.RootToken
@@ -129,24 +121,19 @@ func initializeVault(vaultClient *vault.Client) {
 }
 
 func unsealVault(vaultClient *vault.Client) {
-	log := logrus.New()
-	log.SetLevel(logrus.InfoLevel)
-
 	keys, err := getVaultKeys(vaultKeysSecret, namespace)
 	if err != nil {
-		logrus.SetLevel(logrus.FatalLevel)
-		log.Fatalf("Unable to get Vault keys: %v", err)
+		log.Errorf("Unable to get Vault keys: %v", err)
 	}
 
 	// Unseal the Vault using the keys
 	for _, key := range keys {
 		response, err := vaultClient.Sys().Unseal(key)
 		if err != nil {
-			logrus.SetLevel(logrus.FatalLevel)
-			log.Fatalf("Unable to unseal Vault: %v", err)
+			log.Errorf("Unable to unseal Vault: %v", err)
 		}
 		if response.Sealed {
-			log.Infof("Unsealing Vault with key %s...", key)
+			log.Info("Unsealing Vault...")
 		} else {
 			log.Info("Vault is unsealed")
 		}
@@ -154,9 +141,6 @@ func unsealVault(vaultClient *vault.Client) {
 }
 
 func getVaultKeys(keysSecret, namespace string) ([]string, error) {
-	log := logrus.New()
-	log.SetLevel(logrus.InfoLevel)
-
 	// Get the Kubernetes clientset
 	clientset := createKubernetesClient()
 
@@ -164,11 +148,9 @@ func getVaultKeys(keysSecret, namespace string) ([]string, error) {
 	secret, err := clientset.CoreV1().Secrets(namespace).Get(context.Background(), keysSecret, metav1.GetOptions{})
 	if err != nil {
 		if errors.IsNotFound(err) {
-			logrus.SetLevel(logrus.ErrorLevel)
 			log.Errorf("Secret %s does not exist in namespace %s.", keysSecret, namespace)
 		}
-		logrus.SetLevel(logrus.FatalLevel)
-		log.Fatalf("Unable to get secret: %v", err)
+		log.Errorf("Unable to get secret: %v", err)
 	}
 
 	// Extract the Vault keys from the secret
@@ -190,26 +172,20 @@ func checkSecretExist(clientset *kubernetes.Clientset, namespace, secretName str
 }
 
 func saveRootTokenAndKeys(keys []string, rootToken, rootTokenSecret, keysSecret, namespace string) {
-	log := logrus.New()
-	log.SetLevel(logrus.InfoLevel)
-
 	// Get the Kubernetes clientset
 	clientset := createKubernetesClient()
 
 	// Check if both secrets exist
 	existRootTokenSecret, err := checkSecretExist(clientset, namespace, rootTokenSecret)
 	if err != nil {
-		logrus.SetLevel(logrus.FatalLevel)
-		log.Fatalf("Unable to get secret: %v", err)
+		log.Errorf("Unable to get secret: %v", err)
 	}
 	existKeysSecret, err := checkSecretExist(clientset, namespace, keysSecret)
 	if err != nil {
-		logrus.SetLevel(logrus.FatalLevel)
-		log.Fatalf("Unable to get secret: %v", err)
+		log.Errorf("Unable to get secret: %v", err)
 	}
 
 	if existRootTokenSecret && existKeysSecret {
-		logrus.SetLevel(logrus.ErrorLevel)
 		log.Errorf("Both secrets %s and %s already exist in namespace %s. Please delete them first to proceed.", rootTokenSecret, keysSecret, namespace)
 	}
 
@@ -245,12 +221,10 @@ func saveRootTokenAndKeys(keys []string, rootToken, rootTokenSecret, keysSecret,
 }
 
 func createSecret(clientset *kubernetes.Clientset, namespace string, secret *v1.Secret, wg *sync.WaitGroup) {
-	log := logrus.New()
-	logrus.SetLevel(logrus.FatalLevel)
 	defer wg.Done()
 	_, err := clientset.CoreV1().Secrets(namespace).Create(context.Background(), secret, metav1.CreateOptions{})
 	if err != nil {
-		log.Fatalf("Unable to create secret: %v", err)
+		log.Errorf("Unable to create secret: %v", err)
 	}
 }
 
