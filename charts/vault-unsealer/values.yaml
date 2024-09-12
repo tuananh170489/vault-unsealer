@@ -1,4 +1,4 @@
-# Default values for vault-autounseal.
+# Default values for vault-unseal.
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
@@ -8,29 +8,18 @@ image:
   repository: tuananh170489/vault-unsealer
   pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
-  tag: "latest"
+  tag: ""
 
 imagePullSecrets: []
 nameOverride: ""
 fullnameOverride: ""
 
-serviceAccount:
-  # Specifies whether a service account should be created
-  create: true
-  # Annotations to add to the service account
-  annotations: {}
-  # The name of the service account to use.
-  # If not set and create is true, a name is generated using the fullname template
-  name: ""
-
 podAnnotations: {}
 
-podSecurityContext:
-  {}
+podSecurityContext: {}
   # fsGroup: 2000
 
-securityContext:
-  {}
+securityContext: {}
   # capabilities:
   #   drop:
   #   - ALL
@@ -38,8 +27,7 @@ securityContext:
   # runAsNonRoot: true
   # runAsUser: 1000
 
-resources:
-  {}
+resources: {}
   # We usually recommend not to specify default resources and to leave this as a conscious
   # choice for the user. This also increases chances charts run on environments with little
   # resources, such as Minikube. If you do want to specify resources, uncomment the following
@@ -59,7 +47,7 @@ affinity: {}
 
 unsealer:
   # url for vault
-  vault_url: "https://vault.vault.svc.cluster.local:8200"
+  vault_url: "https://vault.hashicorp.svc.cluster.local:8200"
   # secret for storing vault root token
   vault_root_token_secret: vault-root-token
   # secret for storing vault unlock keys
